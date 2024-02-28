@@ -44,10 +44,10 @@ class ReplayBuffer:
         self.data = []
         self.index = 0 # index of the next cell to be filled
         self.device = device
-    def append(self, s, a, r, s_, d):
+    def append(self, s, a, r, s_):
         if len(self.data) < self.capacity:
             self.data.append(None)
-        self.data[self.index] = (s, a, r, s_, d)
+        self.data[self.index] = (s, a, r, s_)
         self.index = (self.index + 1) % self.capacity
     def sample(self, batch_size):
         batch = random.sample(self.data, batch_size)
@@ -57,6 +57,7 @@ class ReplayBuffer:
 
 class ProjectAgent:
     def __init__(self) -> None:
+        print("Initializing agent...")
         self.gamma = config['gamma']
         self.batch_size = config['batch_size']
         self.nb_actions = config['nb_actions']
@@ -79,57 +80,58 @@ class ProjectAgent:
         
     def gradient_step(self):
         if len(self.memory) > self.batch_size:
-            X, A, R, Y, D = self.memory.sample(self.batch_size)
-            QYmax = self.target_model(Y).max(1)[0].detach()
-            update = torch.addcmul(R, 1-D, QYmax, value=self.gamma)
+            X, A, R, Y = self.memory.sample(self.batch_size)
+            QYmax = self.model(Y).max(1)[0].detach()
+            #update = torch.addcmul(R, self.gamma, 1-D, QYmax)
+            update = torch.addcmul(R, torch.tensor([1.], device=next(self.model.parameters()).device), QYmax, value=self.gamma)
             QXA = self.model(X).gather(1, A.to(torch.long).unsqueeze(1))
             loss = self.criterion(QXA, update.unsqueeze(1))
             self.optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()
+            self.optimizer.step() 
 
-    def train(self, env, max_episode):
+    def train(self, env, nb_episodes, max_steps):
+        print("Beginning training...")
+        print("Model", self.model)
         episode_return = []
-        episode = 0
         episode_cum_reward = 0
         state, _ = env.reset()
         epsilon = self.epsilon_max
         step = 0
 
-        while episode < max_episode:
-            # update epsilon
-            if step > self.epsilon_delay:
-                epsilon = max(self.epsilon_min, epsilon-self.epsilon_step)
-                step = 0
+        for episode in range(nb_episodes):
+            while step < max_steps:
+                # update epsilon
+                if step > self.epsilon_delay:
+                    epsilon = max(self.epsilon_min, epsilon-self.epsilon_step)
 
-            # select epsilon-greedy action
-            if np.random.rand() < epsilon:
-                action = env.action_space.sample()
-            else:
-                action = self.act(self.model, state)
+                # select epsilon-greedy action
+                if np.random.rand() < epsilon:
+                    action = env.action_space.sample()
+                else:
+                    action = self.act(self.model, state)
 
-            # step
-            next_state, reward, done, trunc, _ = env.step(action)
-            self.memory.append(state, action, reward, next_state, done)
-            episode_cum_reward += reward
+                # step
+                next_state, reward, _, _, _ = env.step(action)
+                self.memory.append(state, action, reward, next_state)
+                episode_cum_reward += reward
 
-            # train
-            self.gradient_step()
+                # train
+                self.gradient_step()
 
-            # next transition
-            step += 1
-            if done:
-                episode += 1
-                print("Episode ", '{:3d}'.format(episode), 
-                      ", epsilon ", '{:6.2f}'.format(epsilon), 
-                      ", batch size ", '{:5d}'.format(len(self.memory)), 
-                      ", episode return ", '{:4.1f}'.format(episode_cum_reward),
-                      sep='')
-                state, _ = env.reset()
-                episode_return.append(episode_cum_reward)
-                episode_cum_reward = 0
-            else:
-                state = next_state
+                # next transition
+                step += 1
+
+            print("Episode ", '{:3d}'.format(episode), 
+                ", epsilon ", '{:6.2f}'.format(epsilon), 
+                ", batch size ", '{:5d}'.format(len(self.memory)), 
+                ", episode return ", '{:4.1f}'.format(episode_cum_reward),
+                sep='')
+            state, _ = env.reset()
+            episode_return.append(episode_cum_reward)
+            episode_cum_reward = 0
+
+            step = 0
 
         return episode_return
 
