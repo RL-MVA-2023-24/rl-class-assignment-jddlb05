@@ -12,7 +12,7 @@ env = TimeLimit(
 # ENJOY!
 class ProjectAgent:
     def act(self, observation, use_random=False):
-        return 0
+        return 1
 
     def save(self, path):
         pass
