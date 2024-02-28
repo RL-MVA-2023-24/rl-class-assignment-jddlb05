@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 import random
+import pickle
+import os
 
 env = TimeLimit(
     env=HIVPatient(domain_randomization=False), max_episode_steps=200
@@ -32,8 +34,8 @@ config = {'gamma': 0.9,
           'batch_size': 32,
           'epsilon_max': 1.,
           'epsilon_min': 0.1,
-          'epsilon_decay_period': 32,
-          'epsilon_decay_delay': 3,
+          'epsilon_decay_period': 40,
+          'epsilon_decay_delay': 10,
           'buffer_size': int(1e5),
           'learning_rate':0.001
 }
@@ -56,8 +58,9 @@ class ReplayBuffer:
         return len(self.data)
 
 class ProjectAgent:
-    def __init__(self) -> None:
+    def __init__(self, name="agent_test1") -> None:
         print("Initializing agent...")
+        self.name = name
         self.gamma = config['gamma']
         self.batch_size = config['batch_size']
         self.nb_actions = config['nb_actions']
@@ -92,7 +95,6 @@ class ProjectAgent:
 
     def train(self, env, nb_episodes, max_steps):
         print("Beginning training...")
-        print("Model", self.model)
         episode_return = []
         episode_cum_reward = 0
         state, _ = env.reset()
@@ -100,16 +102,16 @@ class ProjectAgent:
         step = 0
 
         for episode in range(nb_episodes):
+            if episode > 0:
+                    epsilon = max(self.epsilon_min, epsilon-self.epsilon_step)
             while step < max_steps:
                 # update epsilon
-                if step > self.epsilon_delay:
-                    epsilon = max(self.epsilon_min, epsilon-self.epsilon_step)
 
                 # select epsilon-greedy action
                 if np.random.rand() < epsilon:
                     action = env.action_space.sample()
                 else:
-                    action = self.act(self.model, state)
+                    action = self.act(state)
 
                 # step
                 next_state, reward, _, _, _ = env.step(action)
@@ -124,8 +126,8 @@ class ProjectAgent:
 
             print("Episode ", '{:3d}'.format(episode), 
                 ", epsilon ", '{:6.2f}'.format(epsilon), 
-                ", batch size ", '{:5d}'.format(len(self.memory)), 
-                ", episode return ", '{:4.1f}'.format(episode_cum_reward),
+                ", Memory length ", '{:5d}'.format(len(self.memory)), 
+                ", episode return / 1e5 ", '{:4.1f}'.format(episode_cum_reward/10000),
                 sep='')
             state, _ = env.reset()
             episode_return.append(episode_cum_reward)
@@ -138,7 +140,14 @@ class ProjectAgent:
 
 
     def save(self, path):
-        pass
+        with open(self.name+'.pkl','wb') as f:
+            pickle.dump(self.__dict__, f)
 
     def load(self):
-        pass
+        filename = "/test_40eps.pkl"
+        print("Trying to load file"+os.getcwd()+filename)
+        with open(filename,'rb') as f:
+            loaded_data = pickle.load(f)
+            print("Loaded successfully")
+        self.__dict__.update(loaded_data)
+        self.model.to('cpu')
