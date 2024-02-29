@@ -56,6 +56,8 @@ class ReplayBuffer:
         return list(map(lambda x:torch.Tensor(np.array(x)).to(self.device), list(zip(*batch))))
     def __len__(self):
         return len(self.data)
+    def to(self, device):
+        self.device = device
 
 class ProjectAgent:
     def __init__(self, name="agent_test1") -> None:
@@ -153,4 +155,5 @@ class ProjectAgent:
             print("Loaded successfully")
         self.__dict__.update(loaded_data)
         self.model.to('cpu')
+        self.memory.to('cpu')
     
