@@ -24,8 +24,13 @@ nb_neurons = 32
 
 DQN_model = torch.nn.Sequential(nn.Linear(state_dim, nb_neurons),
                           nn.ReLU(),
+                          nn.Dropout(0.1),
                           nn.Linear(nb_neurons, nb_neurons),
-                          nn.ReLU(), 
+                          nn.ReLU(),
+                          nn.Dropout(0.1),
+                          nn.Linear(state_dim, nb_neurons), 
+                          nn.ReLU(),
+                          nn.Dropout(0.1),
                           nn.Linear(nb_neurons, n_action)).to(device)
 
 config = {'gamma': 0.9, 
@@ -154,6 +159,6 @@ class ProjectAgent:
             loaded_data = pickle.load(f)
             print("Loaded successfully")
         self.__dict__.update(loaded_data)
-        self.model.to('cpu')
-        self.memory.to('cpu')
+        self.model.to(torch.device('cpu'))
+        self.memory.to(torch.device('cpu'))
     
