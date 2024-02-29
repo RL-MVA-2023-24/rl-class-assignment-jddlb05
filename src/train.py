@@ -28,7 +28,7 @@ DQN_model = torch.nn.Sequential(nn.Linear(state_dim, nb_neurons),
                           nn.Linear(nb_neurons, nb_neurons),
                           nn.ReLU(),
                           nn.Dropout(0.1),
-                          nn.Linear(state_dim, nb_neurons), 
+                          nn.Linear(nb_neurons, nb_neurons), 
                           nn.ReLU(),
                           nn.Dropout(0.1),
                           nn.Linear(nb_neurons, n_action)).to(device)
@@ -78,7 +78,7 @@ class ProjectAgent:
         self.epsilon_delay = config['epsilon_decay_delay']
         self.epsilon_step = (self.epsilon_max-self.epsilon_min)/self.epsilon_stop
         self.model = DQN_model 
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = torch.nn.SmoothL1Loss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['learning_rate'])
         
 
@@ -87,6 +87,8 @@ class ProjectAgent:
         with torch.no_grad():
             Q = self.model(torch.Tensor(observation).unsqueeze(0).to(device))
             return torch.argmax(Q).item()
+        
+
         
     def gradient_step(self):
         if len(self.memory) > self.batch_size:
@@ -147,18 +149,17 @@ class ProjectAgent:
 
 
     def save(self, path):
-        with open(self.name+'.pkl','wb') as f:
-            pickle.dump(self.__dict__, f)
+        cwd_path = os.path.dirname(os.path.realpath(__file__))
+        full_path = os.path.join(os.path.dirname(cwd_path), path)
+        print("Saving model to: "+full_path)
+        torch.save(self.model, full_path)
+        print("Saved successfully")
 
     def load(self):
-        filename = "test_40eps.pkl"
+        filename = "test_40eps.pt"
         cwd_path = os.path.dirname(os.path.realpath(__file__))
         full_path = os.path.join(os.path.dirname(cwd_path), filename)
-        print("Trying to load file"+full_path)
-        with open(full_path,'rb') as f:
-            loaded_data = pickle.load(f)
-            print("Loaded successfully")
-        self.__dict__.update(loaded_data)
-        self.model.to(torch.device('cpu'))
+        print("Trying to load model file"+full_path)
+        self.model = torch.load(full_path, map_location=torch.device("cpu"))
         self.memory.to(torch.device('cpu'))
     
