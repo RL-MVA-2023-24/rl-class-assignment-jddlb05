@@ -144,10 +144,13 @@ class ProjectAgent:
             pickle.dump(self.__dict__, f)
 
     def load(self):
-        filename = "/test_40eps.pkl"
-        print("Trying to load file"+os.getcwd()+filename)
-        with open(filename,'rb') as f:
+        filename = "test_40eps.pkl"
+        cwd_path = os.path.dirname(os.path.realpath(__file__))
+        full_path = os.path.join(os.path.dirname(cwd_path), filename)
+        print("Trying to load file"+full_path)
+        with open(full_path,'rb') as f:
             loaded_data = pickle.load(f)
             print("Loaded successfully")
         self.__dict__.update(loaded_data)
         self.model.to('cpu')
+    
