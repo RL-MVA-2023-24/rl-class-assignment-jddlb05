@@ -233,7 +233,7 @@ class ProjectAgent:
         print("Saved successfully")
 
     def load(self):
-        filename = "model_good3.pt"
+        filename = "model_good4.pt"
         cwd_path = os.path.dirname(os.path.realpath(__file__))
         full_path = os.path.join(os.path.dirname(cwd_path), filename)
         print("Trying to load model file"+full_path)
