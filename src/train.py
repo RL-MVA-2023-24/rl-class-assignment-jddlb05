@@ -25,13 +25,19 @@ state_dim = env.observation_space.shape[0]
 n_action = env.action_space.n
 nb_neurons = 256
 
+depth = 4
+
 DQN_model = torch.nn.Sequential(
                           nn.Linear(state_dim, nb_neurons),
                           nn.ReLU(),
-                          nn.Dropout(0.5),
                           nn.Linear(nb_neurons, nb_neurons),
                           nn.ReLU(),
-                          nn.Dropout(0.3),
+                          nn.Linear(nb_neurons, nb_neurons),
+                          nn.ReLU(),
+                          #nn.Dropout(0),
+                          nn.Linear(nb_neurons, nb_neurons),
+                          nn.ReLU(),
+                          #nn.Dropout(0),
                         #   nn.Linear(nb_neurons, nb_neurons), 
                         #   nn.ReLU(),
                         #   #nn.Dropout(0.05),
@@ -53,7 +59,7 @@ config = {'gamma': 0.975,
           'update_target_freq': 600,
           'update_target_tau': 0.001,
           'monitor_every': 25,
-          'gradient_steps': 2
+          'gradient_steps': 4
 }
 
 class ReplayBuffer:
@@ -247,7 +253,7 @@ class ProjectAgent:
         print("Saved successfully")
 
     def load(self):
-        filename = "model_final2.pt"
+        filename = "model_final3.pt"
         cwd_path = os.path.dirname(os.path.realpath(__file__))
         full_path = os.path.join(os.path.dirname(cwd_path), filename)
         print("Trying to load model file"+full_path)
