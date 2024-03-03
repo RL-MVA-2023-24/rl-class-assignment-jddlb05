@@ -21,32 +21,34 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 state_dim = env.observation_space.shape[0]
 n_action = env.action_space.n
-nb_neurons = 128
+nb_neurons = 256
 
 DQN_model = torch.nn.Sequential(
                           nn.Linear(state_dim, nb_neurons),
-                          nn.ELU(alpha=0.05),
-                          nn.Dropout(0.1),
+                          nn.SiLU(0),
+                          #nn.Dropout(0.1),
                           nn.Linear(nb_neurons, nb_neurons),
-                          nn.ELU(alpha=0.05),
+                          nn.SiLU(0),
                           nn.Dropout(0.1),
                           nn.Linear(nb_neurons, nb_neurons), 
-                          nn.ELU(alpha=0.05),
+                          nn.SiLU(0),
                           nn.Dropout(0.1),
                           nn.Linear(nb_neurons, n_action)
                             ).to(device)
 
-config = {'gamma': 0.98, 
+config = {'gamma': 0.99, 
           'batch_size': 1024,
           'epsilon_max': 1.,
-          'epsilon_min': 0.05,
-          'epsilon_stop': 20000,
-          'epsilon_delay': 20,
+          'epsilon_min': 0.04,
+          'epsilon_stop': 16000,
+          'epsilon_delay': 10,
           'buffer_size': int(1e5),
           'learning_rate': 0.001,
           'update_target_strategy': 'ema',
-          'update_target_freq': 30,
-          'update_target_tau': 0.001
+          'update_target_freq': 600,
+          'update_target_tau': 0.001,
+          'monitor_every': 25,
+          'gradient_steps':2
 }
 
 class ReplayBuffer:
@@ -205,7 +207,7 @@ class ProjectAgent:
                           sep='')
                     if MC_tr > best_return:
                         best_return = MC_tr
-                        self.save("backup_model.pt")
+                        self.save("backup_model_test_again.pt")
                         print("New best return: ", best_return)
                 else:
                     episode_return.append(episode_cum_reward)
@@ -231,7 +233,7 @@ class ProjectAgent:
         print("Saved successfully")
 
     def load(self):
-        filename = "model_test1.pt"
+        filename = "model_good2.pt"
         cwd_path = os.path.dirname(os.path.realpath(__file__))
         full_path = os.path.join(os.path.dirname(cwd_path), filename)
         print("Trying to load model file"+full_path)
