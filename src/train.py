@@ -5,6 +5,7 @@ import torch.nn as nn
 import numpy as np
 import random
 import pickle
+from copy import deepcopy
 import os
 
 env = TimeLimit(
@@ -42,7 +43,10 @@ config = {'gamma': 0.9,
           'epsilon_decay_period': 40,
           'epsilon_decay_delay': 10,
           'buffer_size': int(1e5),
-          'learning_rate':0.001
+          'learning_rate':0.001,
+          'update_target_strategy':'ema',
+          'update_target_freq':20,
+          'update_target_tau':0.008
 }
 
 class ReplayBuffer:
@@ -78,15 +82,23 @@ class ProjectAgent:
         self.epsilon_delay = config['epsilon_decay_delay']
         self.epsilon_step = (self.epsilon_max-self.epsilon_min)/self.epsilon_stop
         self.model = DQN_model 
+        self.target_model = deepcopy(self.model).to(device)
+        self.nb_gradient_steps = config['gradient_steps'] if 'gradient_steps' in config.keys() else 1
+        self.device = "cuda" if next(self.model.parameters()).is_cuda else "cpu"
         self.criterion = torch.nn.SmoothL1Loss()
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config['learning_rate'])
+        self.update_target_strategy = config['update_target_strategy'] if 'update_target_strategy' in config.keys() else 'replace'
+        self.update_target_freq = config['update_target_freq'] if 'update_target_freq' in config.keys() else 20
+        self.update_target_tau = config['update_target_tau'] if 'update_target_tau' in config.keys() else 0.008
         
 
     def act(self, observation, use_random=False):
-        device = "cuda" if next(self.model.parameters()).is_cuda else "cpu"
-        with torch.no_grad():
-            Q = self.model(torch.Tensor(observation).unsqueeze(0).to(device))
-            return torch.argmax(Q).item()
+        if use_random:
+            return env.action_space.sample()
+        else:
+            with torch.no_grad():
+                Q = self.model(torch.Tensor(observation).unsqueeze(0).to(self.device))
+                return torch.argmax(Q).item()
         
 
         
@@ -95,12 +107,13 @@ class ProjectAgent:
             X, A, R, Y = self.memory.sample(self.batch_size)
             QYmax = self.model(Y).max(1)[0].detach()
             #update = torch.addcmul(R, self.gamma, 1-D, QYmax)
-            update = torch.addcmul(R, torch.tensor([1.], device=next(self.model.parameters()).device), QYmax, value=self.gamma)
+            update = torch.addcmul(R, torch.tensor([1.], device=self.device), QYmax, value=self.gamma)
             QXA = self.model(X).gather(1, A.to(torch.long).unsqueeze(1))
             loss = self.criterion(QXA, update.unsqueeze(1))
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step() 
+
 
     def train(self, env, nb_episodes, max_steps):
         print("Beginning training...")
@@ -111,7 +124,7 @@ class ProjectAgent:
         step = 0
 
         for episode in range(nb_episodes):
-            if episode > 0:
+            if episode > 0: #decay epsilon every episode for now
                     epsilon = max(self.epsilon_min, epsilon-self.epsilon_step)
             while step < max_steps:
                 # update epsilon
@@ -120,7 +133,7 @@ class ProjectAgent:
                 if np.random.rand() < epsilon:
                     action = env.action_space.sample()
                 else:
-                    action = self.act(state)
+                    action = self.act(state, use_random=False)
 
                 # step
                 next_state, reward, _, _, _ = env.step(action)
@@ -128,7 +141,20 @@ class ProjectAgent:
                 episode_cum_reward += reward
 
                 # train
-                self.gradient_step()
+                for _ in range(self.nb_gradient_steps): 
+                    self.gradient_step()
+                # update target network if needed
+                if self.update_target_strategy == 'replace':
+                    if step % self.update_target_freq == 0: 
+                        self.target_model.load_state_dict(self.model.state_dict())
+                if self.update_target_strategy == 'ema':
+                    target_state_dict = self.target_model.state_dict()
+                    model_state_dict = self.model.state_dict()
+                    tau = self.update_target_tau
+                    for key in model_state_dict:
+                        target_state_dict[key] = tau*model_state_dict[key] + (1-tau)*target_state_dict[key]
+                    self.target_model.load_state_dict(target_state_dict)
+                # next transition
 
                 # next transition
                 step += 1
@@ -156,7 +182,7 @@ class ProjectAgent:
         print("Saved successfully")
 
     def load(self):
-        filename = "test_40eps.pt"
+        filename = "test_200eps_1.pt"
         cwd_path = os.path.dirname(os.path.realpath(__file__))
         full_path = os.path.join(os.path.dirname(cwd_path), filename)
         print("Trying to load model file"+full_path)
