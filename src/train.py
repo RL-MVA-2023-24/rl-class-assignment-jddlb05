@@ -27,27 +27,24 @@ nb_neurons = 256
 
 depth = 4
 
-DQN_model = torch.nn.Sequential(
-                          nn.Linear(state_dim, nb_neurons),
-                          nn.ReLU(),
-                          nn.Linear(nb_neurons, nb_neurons),
-                          nn.ReLU(),
-                          nn.Linear(nb_neurons, nb_neurons),
-                          nn.ReLU(),
-                          #nn.Dropout(0),
-                          nn.Linear(nb_neurons, nb_neurons),
-                          nn.ReLU(),
-                          #nn.Dropout(0),
-                        #   nn.Linear(nb_neurons, nb_neurons), 
-                        #   nn.ReLU(),
-                        #   #nn.Dropout(0.05),
-                          nn.Linear(nb_neurons, nb_neurons), 
-                          nn.ReLU(),
-                          #nn.Dropout(0.1),
-                          nn.Linear(nb_neurons, n_action)
-                            ).to(device)
+class DQN_model_Class(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, depth = 2, activation = torch.nn.ReLU()):
+        super(DQN_model_Class, self).__init__()
+        self.input_layer = torch.nn.Linear(input_dim, hidden_dim)
+        self.hidden_layers = torch.nn.ModuleList([torch.nn.Linear(hidden_dim, hidden_dim) for _ in range(depth - 1)])
+        self.output_layer = torch.nn.Linear(hidden_dim, output_dim)
+        self.activation = activation
 
-config = {'gamma': 0.975, 
+    def forward(self, x):
+        x = self.activation(self.input_layer(x))
+        for layer in self.hidden_layers:
+            x = self.activation(layer(x))
+        return self.output_layer(x)
+
+
+config = {'gamma': 0.975,
+          'nb_neurons': 256,
+          'depth': 4,
           'batch_size': 1024,
           'epsilon_max': 1.,
           'epsilon_min': 0.04,
@@ -61,6 +58,8 @@ config = {'gamma': 0.975,
           'monitor_every': 25,
           'gradient_steps': 4
 }
+DQN_model = DQN_model_Class(input_dim=state_dim, hidden_dim=config["nb_neurons"],
+                            output_dim=n_action, depth=config['depth'] )
 
 class ReplayBuffer:
     def __init__(self, capacity, device):
@@ -82,18 +81,19 @@ class ReplayBuffer:
         self.device = device
 
 class ProjectAgent:
-    def __init__(self, name="agent_test1") -> None:
+    def __init__(self, config=config, name="agent_test1") -> None:
         print("Initializing agent...")
         self.name = name
         self.gamma = config['gamma']
         self.batch_size = config['batch_size']
         self.memory = ReplayBuffer(config['buffer_size'], device)
+        self.model = DQN_model_Class(input_dim=state_dim, hidden_dim=config["nb_neurons"],
+                                     output_dim=n_action, depth=config['depth'] )
         self.epsilon_max = config['epsilon_max']
         self.epsilon_min = config['epsilon_min']
         self.epsilon_stop = config['epsilon_stop'] if 'epsilon_stop' in config.keys() else 1000
         self.epsilon_delay = config['epsilon_delay'] if 'epsilon_delay' in config.keys() else 20
         self.epsilon_step = (self.epsilon_max-self.epsilon_min)/self.epsilon_stop
-        self.model = DQN_model 
         self.target_model = deepcopy(self.model).to(device)
         self.device = "cuda" if next(self.model.parameters()).is_cuda else "cpu"
         self.criterion = torch.nn.SmoothL1Loss()
@@ -253,7 +253,7 @@ class ProjectAgent:
         print("Saved successfully")
 
     def load(self):
-        filename = "model_final3.pt"
+        filename = "model_morning2.pt"
         cwd_path = os.path.dirname(os.path.realpath(__file__))
         full_path = os.path.join(os.path.dirname(cwd_path), filename)
         print("Trying to load model file"+full_path)
